@@ -6,14 +6,15 @@
 
 #define PI 3.1415926535879
 #define MAX_STEPS 1.e6
-#define ETA 0.89 // for water at 398 K
+#define ETA 0.89 // viscosity for water at 398 K
 #define DIFF 0.01
 #define PRINTERVAL 0.05
 
 int main(int argc, char* argv[]){
 
   if (argc != 5) {
-    std::cerr << "Usage: particle_mass particle_radius alpha beta" << std::endl;
+    std::cerr << "Usage: ./a.out particle_mass particle_radius alpha beta" << std::endl;
+    std::cerr << "For starters try: ./a.out 0.00001 0.000001 0.0003 0.0005" << std::endl;
     return 1;
   }
 
@@ -41,16 +42,15 @@ int main(int argc, char* argv[]){
   
   for (int i = 3; i > 0; i--) 
     for (int j = 0; j < 4; j++){
-      h[k] = coeff[j]*pow(10, -i);
+      h[k] = coeff[j]*pow(10, -i); // populate h with log-scaled step sizes
       k++;
     }
   
   for (int i = 0; i < len; i++) {
     
     double x = 0., xdot = 0., t = 0., tprint = 0., sqx = 0., rms = 0.;
-    double amp = sqrt(2*DIFF/h[i])/tau;
+    double amp = sqrt(2*DIFF/h[i])/tau; 
     int numsteps = 0;
-    double stuff;
 
     char trj[30];
     sprintf(trj, "./traj/traj_%d.txt", i); 
@@ -63,22 +63,21 @@ int main(int argc, char* argv[]){
       unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
       std::default_random_engine generator(seed);
       std::normal_distribution<double> dist(0., 1.);
-      double noise = amp*dist(generator);
-      x += h[i]*xdot;
+      double noise = amp*dist(generator); // generate gaussian noise with rms amplitude given by einstein-stokes
+      x += h[i]*xdot;                    
       sqx += x*x;
-      stuff = (noise - tau*xdot + 2*a*x - 4*b*pow(x, 3));
-      xdot += h[i]*stuff;
-      rms += xdot*xdot;
+      xdot += h[i]*(noise - tau*xdot + 2*a*x - 4*b*pow(x, 3)); // langevin eqn. w/ U(x) = -alpha*x^2 + beta*x^4 
+      rms += xdot*xdot;                                        // with coefficients scaled to a, b for particle mass
       tprint += h[i];
-      if (tprint >= PRINTERVAL){
+      if (tprint >= PRINTERVAL){ // only dump positions and velocities every t = 0.5 
 	fprintf(traj, "%f   \t%f \t%f \n", t, x, xdot); 
 	tprint = 0;
-	}
+      }
       t += h[i];
     }
 
-    sqx /= numsteps;
-    rms = sqrt(rms)/numsteps;
+    sqx /= numsteps; // mean square position of particle over the course of the trajectory
+    rms = sqrt(rms)/numsteps; // rms velocity of particle 
     std::cout << "Calculating mean square displacement and rms velocity" << std::endl; 
     fprintf(plotmsd, "%f \t%f\n", h[i], sqx);
     fprintf(plotrms, "%f \t%f\n", h[i], rms);
